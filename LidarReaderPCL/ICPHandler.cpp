@@ -24,12 +24,20 @@ ICPHandler::ICPHandler()
       , m_cloud_tr(new pcl::PointCloud<pcl::PointXYZ>)
       , m_cloud_icp(new pcl::PointCloud<pcl::PointXYZ>)
 {
-    auto csvFile1 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-12-17-52-48_Velodyne-VLP-16-Data.csv";
+    std::vector<std::string> files;
+    files.push_back("2018-09-12-19-21-30_Velodyne-VLP-16-Data.csv");
+    files.push_back("2018-09-12-19-21-41_Velodyne-VLP-16-Data.csv");
+    files.push_back("2018-09-12-19-21-50_Velodyne-VLP-16-Data.csv");
+    files.push_back("2018-09-12-19-22-04_Velodyne-VLP-16-Data.csv");
+    files.push_back("2018-09-12-19-22-12_Velodyne-VLP-16-Data.csv");
+
+    std::string basePath("H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\");
+
+    auto csvFile1 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-12-19-21-30_Velodyne-VLP-16-Data.csv";
     std::vector<std::vector<double>> data = parse2DCsvFile(csvFile1);
     loadPointCloud(data, m_cloud_in);
 
-    //auto csvFile2 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-12-16-45-07_Velodyne-VLP-16-Data\\2018-09-12-16-45-07_Velodyne-VLP-16-Data (Frame 0582).csv";
-    auto csvFile2 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-12-17-53-07_Velodyne-VLP-16-Data.csv";
+    auto csvFile2 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-12-19-21-41_Velodyne-VLP-16-Data.csv";
     std::vector<std::vector<double>> data2 = parse2DCsvFile(csvFile2);
     loadPointCloud(data2, m_cloud_icp);
 
