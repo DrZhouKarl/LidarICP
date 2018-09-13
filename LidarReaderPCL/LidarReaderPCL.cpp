@@ -32,7 +32,7 @@ void runICPSimple()
 {
     ICPHandler h;
     h.downsample(0.001);
-    h.setupICP();
+    //h.setupICP();
     h.startVisualisation();
 }
 

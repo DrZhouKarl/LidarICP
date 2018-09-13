@@ -39,6 +39,12 @@ public:
         return m_dataQueue.empty();
     }
 
+    size_t size()
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        return m_dataQueue.size();
+    }
+
     void clear()
     {
         std::unique_lock<std::mutex> lock(m_mutex);
