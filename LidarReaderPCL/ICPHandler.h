@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ThreadSafeQueue.h"
+
 #include <pcl/io/ply_io.h>
 #include <pcl/point_types.h>
 #include <pcl/registration/icp.h>
@@ -30,8 +32,10 @@ private:
     Eigen::Matrix4d m_transformationMatrix;
     pcl::console::TicToc m_timer;
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud_in, m_cloud_in_downsampled; // Original point cloud
-    pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud_tr, m_cloud_tr_downsampled; // Transformed point cloud
-    pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud_icp, m_cloud_icp_downsampled; // ICP output point cloud
+    ThreadSafeQueue<pcl::PointCloud<pcl::PointXYZ>::Ptr> m_queue;
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud_in; // Original point cloud
+    pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud_tr; // Transformed point cloud
+    pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud_icp; // ICP output point cloud
 };
 

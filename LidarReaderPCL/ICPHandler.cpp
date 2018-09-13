@@ -33,6 +33,16 @@ ICPHandler::ICPHandler()
 
     std::string basePath("H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\");
 
+    for (const auto& file : files)
+    {
+        auto fullPath = basePath + file;
+        std::vector<std::vector<double>> data = parse2DCsvFile(fullPath);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr newCloud(new pcl::PointCloud<pcl::PointXYZ>);
+        loadPointCloud(data, newCloud);
+        m_queue.push(newCloud);
+        std::cout << "Loaded cloud from " << fullPath << " with points: " << newCloud->size() << std::endl;
+    }
+
     auto csvFile1 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-12-19-21-30_Velodyne-VLP-16-Data.csv";
     std::vector<std::vector<double>> data = parse2DCsvFile(csvFile1);
     loadPointCloud(data, m_cloud_in);
@@ -83,11 +93,8 @@ void ICPHandler::downsample(double leafSize)
 void ICPHandler::startVisualisation()
 {
     pcl::visualization::PCLVisualizer viewer("ICP demo");
-    // Create two vertically separated viewports
-    int v1(0);
     int v2(1);
-    viewer.createViewPort(0.0, 0.0, 0.5, 1.0, v1);
-    viewer.createViewPort(0.5, 0.0, 1.0, 1.0, v2);
+    viewer.createViewPort(0.0, 0.0, 1.0, 1.0, v2);
 
     // The color we will be using
     float bckgr_gray_level = 0.0; // Black
@@ -96,19 +103,12 @@ void ICPHandler::startVisualisation()
     // Original point cloud is white
     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_in_color_h(m_cloud_in, (int)255 * txt_gray_lvl, (int)255 * txt_gray_lvl,
                                                                                      (int)255 * txt_gray_lvl);
-    viewer.addPointCloud(m_cloud_in, cloud_in_color_h, "cloud_in_v1", v1);
     viewer.addPointCloud(m_cloud_in, cloud_in_color_h, "cloud_in_v2", v2);
-
-    // Transformed point cloud is green
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_tr_color_h(m_cloud_tr, 20, 180, 20);
-    viewer.addPointCloud(m_cloud_tr, cloud_tr_color_h, "cloud_tr_v1", v1);
 
     // ICP aligned point cloud is red
     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_icp_color_h(m_cloud_icp, 180, 20, 20);
     viewer.addPointCloud(m_cloud_icp, cloud_icp_color_h, "cloud_icp_v2", v2);
 
-    // Adding text descriptions in each viewport
-    viewer.addText("White: Original point cloud\nGreen: Matrix transformed point cloud", 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "icp_info_1", v1);
     viewer.addText("White: Original point cloud\nRed: ICP aligned point cloud", 10, 15, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "icp_info_2", v2);
 
     std::stringstream ss;
@@ -117,15 +117,13 @@ void ICPHandler::startVisualisation()
     viewer.addText(iterations_cnt, 10, 60, 16, txt_gray_lvl, txt_gray_lvl, txt_gray_lvl, "iterations_cnt", v2);
 
     // Set background color
-    viewer.setBackgroundColor(bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v1);
     viewer.setBackgroundColor(bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v2);
 
     // Set camera position and orientation
     viewer.setCameraPosition(-3.68332, 2.94092, 5.71266, 0.289847, 0.921947, -0.256907, 0);
-    viewer.setSize(1280, 1024); // Visualiser window size
+    viewer.setSize(1920, 1000); // Visualiser window size
 
     // Register keyboard callback :
-
     viewer.registerKeyboardCallback(&ICPHandler::keyboardEventOccurred, *this);
 
     while (!viewer.wasStopped())
@@ -133,7 +131,7 @@ void ICPHandler::startVisualisation()
         viewer.spinOnce();
 
         // The user pressed "space" :
-        if (ICPHandler::m_nextIteration)
+        if (m_nextIteration)
         {
             // The Iterative Closest Point algorithm
             m_timer.tic();
@@ -160,7 +158,7 @@ void ICPHandler::startVisualisation()
                 PCL_ERROR("\nICP has not converged.\n");
             }
         }
-        ICPHandler::m_nextIteration = false;
+        m_nextIteration = false;
     }
 }
 
@@ -171,10 +169,10 @@ void ICPHandler::loadPointCloud(std::vector<std::vector<double>>& data, pcl::Poi
     for (auto it = data.begin(); it != data.end(); ++it)
     {
         const auto& vec = *it;
-        double x = vec.at(0) + 2.0;
-        double y = vec.at(1) + 2.0;
-        double z = vec.at(2) + 2.0;
-        cloud->push_back(pcl::PointXYZ(x / 10.0, y / 10.0, z / 10.0));
+        double x = vec.at(0);
+        double y = vec.at(1);
+        double z = vec.at(2);
+        cloud->push_back(pcl::PointXYZ(x, y, z));
     }
 }
 
