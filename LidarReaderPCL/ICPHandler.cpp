@@ -20,27 +20,42 @@ void ICPHandler::keyboardEventOccurred(const pcl::visualization::KeyboardEvent& 
     }
 }
 
+void ICPHandler::newCloudCallback(const pcl::PointCloud<pcl::PointXYZI>::ConstPtr& newCloud)
+{
+    m_timer.tic();
+    //pcl::PointCloud<pcl::PointXYZ> p;
+    //pcl::copyPointCloud(newCloud, p)
+    if (m_queue.size() < 2)
+    {
+        m_queue.push(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(*newCloud));
+    }
+
+    //boost::mutex::scoped_lock lock(m_cloudMutex);
+    //m_cloud_new = newCloud;
+    std::cout << "New cloud took " << m_timer.toc() << std::endl;
+    std::cout << "Clouds to process: " << m_queue.size() << std::endl;
+}
+
 ICPHandler::ICPHandler()
     : m_iterations(20)
       , m_nextIteration(false)
       , m_newCloud(false)
       , m_transformationMatrix(Eigen::Matrix4d::Identity())
-      , m_cloud_in(new pcl::PointCloud<pcl::PointXYZ>)
-      , m_cloud_tr(new pcl::PointCloud<pcl::PointXYZ>)
-      , m_cloud_icp(new pcl::PointCloud<pcl::PointXYZ>)
+      , m_cloud_in(new pcl::PointCloud<pcl::PointXYZI>)
+      , m_cloud_icp(new pcl::PointCloud<pcl::PointXYZI>)
       , m_viewer("Lidar ICP")
       , m_backgroundColor(0.0)
       , m_textColor(1.0 - m_backgroundColor)
       , m_cloudInColor(m_cloud_in, (int)255 * m_textColor, (int)255 * m_textColor, (int)255 * m_textColor)
       , m_cloudIcpColor(m_cloud_icp, 180, 20, 20)
-      , m_downsampleLeafSize(0.04)
+      , m_downsampleLeafSize(0.004)
+      , m_grabber()
 
 {
-
     std::vector<std::string> files;
-      
-    files.push_back("2018-09-13-16-09-39_Velodyne-VLP-16-Data.csv");
-    files.push_back("2018-09-13-16-09-45_Velodyne-VLP-16-Data.csv");
+
+    //files.push_back("2018-09-13-16-09-39_Velodyne-VLP-16-Data.csv");
+    /*files.push_back("2018-09-13-16-09-45_Velodyne-VLP-16-Data.csv");
     files.push_back("2018-09-13-16-09-51_Velodyne-VLP-16-Data.csv");
     files.push_back("2018-09-13-16-09-57_Velodyne-VLP-16-Data.csv");
     files.push_back("2018-09-13-16-10-05_Velodyne-VLP-16-Data.csv");
@@ -62,29 +77,35 @@ ICPHandler::ICPHandler()
     files.push_back("2018-09-13-16-11-48_Velodyne-VLP-16-Data.csv");
     files.push_back("2018-09-13-16-11-54_Velodyne-VLP-16-Data.csv");
     files.push_back("2018-09-13-16-12-02_Velodyne-VLP-16-Data.csv");
-
+    */
     std::string basePath("H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\");
 
     for (const auto& file : files)
     {
         auto fullPath = basePath + file;
         std::vector<std::vector<double>> data = parse2DCsvFile(fullPath);
-        pcl::PointCloud<pcl::PointXYZ>::Ptr newCloud(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr newCloud(new pcl::PointCloud<pcl::PointXYZI>);
         loadPointCloud(data, newCloud);
         m_queue.push(newCloud);
         std::cout << "Loaded cloud from " << fullPath << " with points: " << newCloud->size() << std::endl;
     }
 
-    auto csvFile1 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-13-16-09-26_Velodyne-VLP-16-Data.csv";
+    auto csvFile1 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-13-18-56-38_Velodyne-VLP-16-Data.csv";
     std::vector<std::vector<double>> data = parse2DCsvFile(csvFile1);
     loadPointCloud(data, m_cloud_in);
 
-    auto csvFile2 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-13-16-09-32_Velodyne-VLP-16-Data.csv";
+    auto csvFile2 = "H:\\01_DROPBOX\\Dropbox\\0_MARCELSCHWITTLICK\\2018_JULIUSVONBISMARCK_HELM\\2018-09-13-18-56-46_Velodyne-VLP-16-Data.csv";
     std::vector<std::vector<double>> data2 = parse2DCsvFile(csvFile2);
     loadPointCloud(data2, m_cloud_icp);
 
     std::cout << "Cloud 1: " << " (" << m_cloud_in->size() << " points)" << std::endl;
     std::cout << "Cloud 2 " << " (" << m_cloud_icp->size() << " points)" << std::endl;
+
+    boost::function<void(const pcl::PointCloud<pcl::PointXYZI>::ConstPtr&)> cloud_cb = boost::bind(&ICPHandler::newCloudCallback, this, _1);
+    std::cout << m_grabber.getName() << std::endl;
+    m_cloudConnection = m_grabber.registerCallback(cloud_cb);
+
+    m_grabber.start();
 
     downsample(m_downsampleLeafSize);
 
@@ -93,6 +114,7 @@ ICPHandler::ICPHandler()
     m_icp.setInputTarget(m_cloud_in);
 
     m_icp.setTransformationEpsilon(0.00001);
+
     //icp.setMaxCorrespondenceDistance(0.05);
     //icp.setEuclideanFitnessEpsilon(1);
     //icp.setRANSACOutlierRejectionThreshold(1.5);
@@ -100,14 +122,16 @@ ICPHandler::ICPHandler()
     //m_icp.align(*m_cloud_icp);
     m_icp.setMaximumIterations(m_iterations); // We set this variable to 1 for the next time we will call .align () function
 
-    m_cloudInColor = pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>(m_cloud_in, (int)255 * m_textColor, (int)255 * m_textColor, (int)255 * m_textColor);
-    m_cloudIcpColor = pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>(m_cloud_icp, 180, 20, 20);
+    m_cloudInColor = pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI>(m_cloud_in, (int)255 * m_textColor, (int)255 * m_textColor, (int)255 * m_textColor);
+    m_cloudIcpColor = pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI>(m_cloud_icp, 180, 20, 20);
 
     setupVisualisation();
 }
 
 ICPHandler::~ICPHandler()
 {
+    m_grabber.stop();
+    m_cloudConnection.disconnect();
 }
 
 void ICPHandler::setupNewCycle()
@@ -115,10 +139,17 @@ void ICPHandler::setupNewCycle()
     if (m_queue.size() >= 1)
     {
         m_timer.tic();
+        m_cloud_recent_transformed = m_cloud_icp;
         *m_cloud_in += *m_cloud_icp;
 
         m_cloud_icp = m_queue.waitAndPop();
-
+        /*
+        if (m_cloudMutex.try_lock())
+        {
+            m_cloud_new.swap(m_cloud_icp);
+            m_cloudMutex.unlock();
+        }
+        */
         downsample(m_downsampleLeafSize);
 
         m_icp.setMaximumIterations(m_iterations);
@@ -133,8 +164,8 @@ void ICPHandler::setupNewCycle()
         //m_icp.align(*m_cloud_icp);
         m_icp.setMaximumIterations(m_iterations); // We set this variable to 1 for the next time we will call .align () function
 
-        m_cloudInColor = pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>(m_cloud_in, (int)255 * m_textColor, (int)255 * m_textColor, (int)255 * m_textColor);
-        m_cloudIcpColor = pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>(m_cloud_icp, 180, 20, 20);
+        m_cloudInColor = pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI>(m_cloud_in, (int)255 * m_textColor, (int)255 * m_textColor, (int)255 * m_textColor);
+        m_cloudIcpColor = pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI>(m_cloud_icp, 180, 20, 20);
 
         std::cout << "Cloud 1: " << " (" << m_cloud_in->size() << " points)" << std::endl;
         std::cout << "Cloud 2 " << " (" << m_cloud_icp->size() << " points)" << std::endl;
@@ -142,10 +173,10 @@ void ICPHandler::setupNewCycle()
         std::cout << "Loading new cloud took " << m_timer.toc() << " ms" << std::endl;
 
         m_timer.tic();
-//#pragma omp parallel for num_threads(4)
-        for(int i = 0; i < 5; i++ )
+        //#pragma omp parallel for num_threads(4)
+        for (int i = 0; i < 10; i++)
         {
-//#pragma omp critical
+            //#pragma omp critical
             {
                 m_icp.align(*m_cloud_icp);
                 m_viewer.updatePointCloud(m_cloud_icp, m_cloudIcpColor, "cloud_icp_v2");
@@ -153,7 +184,7 @@ void ICPHandler::setupNewCycle()
             }
         }
         m_viewer.updatePointCloud(m_cloud_in, m_cloudInColor, "cloud_in_v2");
-        
+
         std::cout << "Aligning clouds took " << m_timer.toc() << " ms" << std::endl;
     }
 }
@@ -164,12 +195,12 @@ void ICPHandler::downsample(double leafSize)
     std::cout << "--- Before downsample ---" << std::endl;
     std::cout << "Cloud 1: " << " (" << m_cloud_in->size() << " points)" << std::endl;
     std::cout << "Cloud 2 " << " (" << m_cloud_icp->size() << " points)" << std::endl;
-    pcl::VoxelGrid<pcl::PointXYZ> sor;
+    pcl::VoxelGrid<pcl::PointXYZI> sor;
     sor.setInputCloud(m_cloud_in);
     sor.setLeafSize(leafSize, leafSize, leafSize);
     sor.filter(*m_cloud_in);
 
-    pcl::VoxelGrid<pcl::PointXYZ> sor2;
+    pcl::VoxelGrid<pcl::PointXYZI> sor2;
     sor2.setInputCloud(m_cloud_icp);
     sor2.setLeafSize(leafSize, leafSize, leafSize);
     sor2.filter(*m_cloud_icp);
@@ -189,10 +220,9 @@ void ICPHandler::startVisualisation()
 
         if (m_newCloud)
         {
-        
             setupNewCycle();
-            
-           
+
+
             //m_newCloud = false;
         }
 
@@ -208,7 +238,7 @@ void ICPHandler::startVisualisation()
             if (m_icp.hasConverged())
             {
                 //std::cout << "ICP has converged, score is " << m_icp.getFitnessScore() << std::endl;
-                
+
                 m_transformationMatrix *= m_icp.getFinalTransformation().cast<double>(); // WARNING /!\ This is not accurate! For "educational" purpose only!
                 //print4x4Matrix(m_transformationMatrix); // Print the transformation between original pose and current pose
 
@@ -227,7 +257,7 @@ void ICPHandler::startVisualisation()
     }
 }
 
-void ICPHandler::loadPointCloud(std::vector<std::vector<double>>& data, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) const
+void ICPHandler::loadPointCloud(std::vector<std::vector<double>>& data, pcl::PointCloud<pcl::PointXYZI>::Ptr cloud) const
 {
     data.erase(data.begin());
 
@@ -237,7 +267,11 @@ void ICPHandler::loadPointCloud(std::vector<std::vector<double>>& data, pcl::Poi
         double x = vec.at(0);
         double y = vec.at(1);
         double z = vec.at(2);
-        cloud->push_back(pcl::PointXYZ(x, y, z));
+        pcl::PointXYZI p;
+        p.x = x;
+        p.y = y;
+        p.z = z;
+        cloud->push_back(p);
     }
 }
 
