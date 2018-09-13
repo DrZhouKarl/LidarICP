@@ -31,7 +31,7 @@ void runSimpleViewer()
 void runICPSimple()
 {
     ICPHandler h;
-    h.downsample(0.001);
+    //h.downsample(0.001);
     //h.setupICP();
     h.startVisualisation();
 }

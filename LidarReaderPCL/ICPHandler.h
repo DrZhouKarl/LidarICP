@@ -46,11 +46,11 @@ private:
     float m_backgroundColor;
     float m_textColor;
     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> m_cloudInColor, m_cloudIcpColor;
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> m_cloudNewTargetColor;
 
-    ThreadSafeQueue<pcl::PointCloud<pcl::PointXYZI>::Ptr> m_queue;
+    ThreadSafeQueue<pcl::PointCloud<pcl::PointXYZI>::Ptr> m_queue, m_recentCloudsQueue;
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr m_cloud_in; // Original point cloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr m_cloud_new; // Transformed point cloud
     pcl::PointCloud<pcl::PointXYZI>::Ptr m_cloud_icp; // ICP output point cloud
     pcl::PointCloud<pcl::PointXYZI>::Ptr m_cloud_recent_transformed; // ICP output point cloud
 };
