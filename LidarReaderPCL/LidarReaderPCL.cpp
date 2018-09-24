@@ -8,8 +8,10 @@
 #include <pcl/visualization/point_cloud_color_handlers.h>
 
 #include "VLPViewerSimple.h"
-#include "ICPHandler.h"
+#include "PointCloudStitcher.h"
 #include <random>
+
+#include "IMUSensor.h"
 
 using namespace std;
 using namespace pcl;
@@ -30,17 +32,16 @@ void runSimpleViewer()
 
 void runICPSimple()
 {
-    ICPHandler h;
-    //h.downsample(0.001);
-    //h.setupICP();
+    PointCloudStitcher h;
     h.startVisualisation();
 }
 
-int main(int argc,
-         char* argv[])
+int main(int argc, char* argv[])
 {
     //runSimpleViewer();
     runICPSimple();
 
+
+    //IMUTest t;
     return (0);
 }
