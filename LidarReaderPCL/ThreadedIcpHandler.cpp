@@ -1,5 +1,8 @@
 #include "stdafx.h"
 #include "ThreadedIcpHandler.h"
+
+#include <pcl/common/common.h>
+
 #include <thread>
 #include <future>
 
@@ -8,31 +11,38 @@ ThreadedIcpHandler::ThreadedIcpHandler()
     : m_finalCloud(new pcl::PointCloud<pcl::PointXYZI>)
       , m_firstCloud(true)
       , m_counter(0)
-      , m_leafSize(0.15)
+      , m_paused(false)
+      , m_minLimit(-100)
+      , m_maxLimit(100)
 {
-    m_leafSize = 0.1;
-    m_downSampler.setLeafSize(0.12);
+    m_downSampler.setLeafSize(0.13);
 
     int threadCount = 6;
     for (int i = 0; i < threadCount; i++)
     {
-        std::thread t1([&]()
+        std::thread t1([=]()
             {
+                KeyPointRegistrationWrapper kpr;
                 IterativeClosestPointWrapper icp;
                 DownSampler downSampler;
-                downSampler.setLeafSize(0.12);
+                downSampler.setLeafSize(0.2);
                 while (true)
                 {
-                    threadedFunction(icp, downSampler);
+                    if (!m_paused)
+                    {
+                        threadedFunction(icp, kpr, downSampler);
+                    } else
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
                 }
             });
         t1.detach();
     }
 }
 
-void ThreadedIcpHandler::threadedFunction(IterativeClosestPointWrapper& icp, DownSampler& downsampler)
+void ThreadedIcpHandler::threadedFunction(IterativeClosestPointWrapper& icp, KeyPointRegistrationWrapper& kpr, DownSampler& downsampler)
 {
-    //m_toProcessQueue.waitAndPop();
     int count = mapVal(m_toProcessQueue.size(), 0, 100, 0, 10, false);
     std::cout << "Skipping " << count << " times." << std::endl;
     for (int i = 0; i < count; i++)
@@ -42,15 +52,51 @@ void ThreadedIcpHandler::threadedFunction(IterativeClosestPointWrapper& icp, Dow
 
     auto toProcess = m_toProcessQueue.waitAndPop();
 
-    downsampler.apply(toProcess);
-    auto finished = icp.apply(m_finalCloud, m_finalCloudMutex, toProcess);
-    m_lastFinishedCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(finished);
+    {
+        /*
+        m_passThroughFilter.setInputCloud(toProcess);
+        m_passThroughFilter.setFilterFieldName("x");
+        m_passThroughFilter.setFilterLimits(0, 0.1);
+        //m_passThroughFilter.setFilterLimitsNegative (true);
+        m_passThroughFilter.filter(*toProcess);
+        pcl::PointXYZI minPt, maxPt;
+        pcl::getMinMax3D(*toProcess, minPt, maxPt);
+        std::cout << "Max x: " << maxPt.x << std::endl;
+        std::cout << "Max y: " << maxPt.y << std::endl;
+        std::cout << "Max z: " << maxPt.z << std::endl;
+        std::cout << "Min x: " << minPt.x << std::endl;
+        std::cout << "Min y: " << minPt.y << std::endl;
+        std::cout << "Min z: " << minPt.z << std::endl;
+        float min = -1;
+        float max = 1;
+        */
+
+        /*
+        boxFilter.setMin(Eigen::Vector4f(m_minLimit, m_minLimit, m_minLimit, 1.0));
+        boxFilter.setMax(Eigen::Vector4f(m_maxLimit, m_maxLimit, m_maxLimit, 1.0));
+        boxFilter.setInputCloud(toProcess);
+        boxFilter.filter(*toProcess);
+        */
+    }
 
     {
+        downsampler.apply(toProcess);
+    }
+    /*
+    {
+        auto finished = kpr.apply(m_finalCloud, m_finalCloudMutex, toProcess);
+        m_lastFinishedCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(finished);
         std::unique_lock<std::mutex> lock(m_finalCloudMutex);
         *m_finalCloud += finished;
     }
-
+    */
+    {
+        auto finished = icp.apply(m_finalCloud, m_finalCloudMutex, toProcess);
+        m_lastFinishedCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(finished);
+        std::unique_lock<std::mutex> lock(m_finalCloudMutex);
+        *m_finalCloud += finished;
+    }
+    
     m_counter += 1;
 
     if (m_counter % 3 == 0)
@@ -68,14 +114,25 @@ void ThreadedIcpHandler::add(pcl::PointCloud<pcl::PointXYZI>::Ptr newCloud)
 {
     if (m_firstCloud)
     {
+        /*
+        boxFilter.setMin(Eigen::Vector4f(m_minLimit, m_minLimit, m_minLimit, 1.0));
+        boxFilter.setMax(Eigen::Vector4f(m_maxLimit, m_maxLimit, m_maxLimit, 1.0));
+        boxFilter.setInputCloud(newCloud);
+        boxFilter.filter(*newCloud);
+        */
         m_downSampler.apply(newCloud);
+
         std::unique_lock<std::mutex> lock(m_finalCloudMutex);
         m_finalCloud = newCloud;
         m_lastFinishedCloud = newCloud;
         m_firstCloud = false;
     }
-    auto cloudCopy = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(*newCloud);
-    m_toProcessQueue.push(cloudCopy);
+
+    if (!m_paused)
+    {
+        auto cloudCopy = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(*newCloud);
+        m_toProcessQueue.push(cloudCopy);
+    }
     std::cout << "To process queue size: " << m_toProcessQueue.size() << std::endl;
     std::cout << "Processed queue size: " << m_counter << std::endl;
 }
@@ -85,6 +142,11 @@ void ThreadedIcpHandler::clear()
     m_firstCloud = true;
     m_toProcessQueue.clear();
     m_counter = 0;
+}
+
+void ThreadedIcpHandler::togglePause()
+{
+    m_paused = !m_paused;
 }
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr ThreadedIcpHandler::getFinalCloudPtr()

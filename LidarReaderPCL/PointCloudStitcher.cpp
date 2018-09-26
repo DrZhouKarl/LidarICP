@@ -116,6 +116,10 @@ void PointCloudStitcher::keyboardEventOccurred(const pcl::visualization::Keyboar
         m_isFirstCloud = true;
         m_threadedIcp.clear();
     }
+    else if (event.getKeySym() == "p" && event.keyDown())
+    {
+        m_threadedIcp.togglePause();
+    }
 }
 
 void PointCloudStitcher::newCloudCallback(const pcl::PointCloud<pcl::PointXYZI>::ConstPtr& newCloud)

@@ -8,7 +8,7 @@ IterativeClosestPointWrapper::IterativeClosestPointWrapper()
 
 pcl::PointCloud<pcl::PointXYZI> IterativeClosestPointWrapper::apply(pcl::PointCloud<pcl::PointXYZI>::Ptr finalCloud, std::mutex& finalCloudMutex, pcl::PointCloud<pcl::PointXYZI>::Ptr newCloud)
 {
-    m_icp.setMaximumIterations(50);
+    //m_icp.setMaximumIterations(50);
     m_icp.setTransformationEpsilon(0.0000001);
     m_icp.setMaxCorrespondenceDistance(0.5);
     //m_icp.setUseReciprocalCorrespondences(true);
@@ -23,15 +23,13 @@ pcl::PointCloud<pcl::PointXYZI> IterativeClosestPointWrapper::apply(pcl::PointCl
     m_icp.setInputTarget(finalCloudCopy);
     pcl::PointCloud<pcl::PointXYZI> returnCloud;
 
-    for (int i = 0; i < 15; i++)
+    for (int i = 0; i < 20; i++)
     {
-        //std::unique_lock<std::mutex> lock(finalCloudMutex);
         m_icp.align(returnCloud);
-        std::cout << "Doing transformation n" << i << std::endl;
-        //m_viewer.spinOnce();
-        //m_cloudIcpColor = pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI>(m_cloud_icp, 180, 20, 20);
-        //m_viewer.updatePointCloud(m_cloud_icp, m_cloudIcpColor, "cloud_icp_v2");
     }
+
+    std::cout << "ICP Thread" << std::this_thread::get_id() << " done." << std::endl;
+
 
     return returnCloud;
 }
