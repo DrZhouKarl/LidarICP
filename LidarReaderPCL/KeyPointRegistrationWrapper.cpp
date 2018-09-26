@@ -4,18 +4,22 @@
 #include <pcl/features/fpfh_omp.h>
 #include <pcl/features/fpfh.h>
 #include <pcl/registration/transformation_estimation_svd.h>
+#include <pcl/registration/correspondence_estimation.h>
+#include <pcl/registration/correspondence_rejection_one_to_one.h>
+#include <pcl/registration/correspondence_rejection_sample_consensus.h>
 
 KeyPointRegistrationWrapper::KeyPointRegistrationWrapper()
     : m_featureExtractor(new pcl::FPFHEstimation<pcl::PointXYZI, pcl::Normal, pcl::FPFHSignature33>)
 {
     //m_featureExtractor->setSearchMethod(pcl::search::Search<pcl::PointXYZI>::Ptr(new pcl::search::KdTree<pcl::PointXYZI>));
-    //m_featureExtractor->setRadiusSearch(0.2);
+    //m_featureExtractor->setRadiusSearch(0.5);
     m_featureExtractor->setKSearch(100);
     pcl::SIFTKeypoint<pcl::PointXYZI, pcl::PointXYZI>* sift3D = new pcl::SIFTKeypoint<pcl::PointXYZI, pcl::PointXYZI>;
-    sift3D->setScales(1.0f, 3, 2);
-    sift3D->setMinimumContrast(0.0);
+    sift3D->setScales(0.1f, 6, 10);
+    sift3D->setMinimumContrast(0.0001);
     keypoint_detector_.reset(sift3D);
     
+
     /*
     pcl::HarrisKeypoint3D<pcl::PointXYZI, pcl::PointXYZI>* harris3D = new pcl::HarrisKeypoint3D<pcl::PointXYZI, pcl::PointXYZI>(pcl::HarrisKeypoint3D<pcl::PointXYZI, pcl::PointXYZI>::HARRIS);
     harris3D->setNonMaxSupression(true);
@@ -41,20 +45,15 @@ pcl::PointCloud<pcl::PointXYZI> KeyPointRegistrationWrapper::apply(pcl::PointClo
     }
     pcl::copyPointCloud(*newCloud, *returnCloud);
     
-    /*
-    pcl::PointCloud<pcl::PointXYZI>::ConstPtr finalCloudCopy;
-    {
-        std::unique_lock<std::mutex> lock(finalCloudMutex);
-        finalCloudCopy = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(*finalCloud);
-    }
-
-    pcl::PointCloud<pcl::PointXYZI>::ConstPtr returnCloud;
-    returnCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(*newCloud);
-    */
     pcl::PointCloud<pcl::PointXYZI>::Ptr keypointsFinal(new pcl::PointCloud<pcl::PointXYZI>());
     pcl::PointCloud<pcl::PointXYZI>::Ptr keypointsNew(new pcl::PointCloud<pcl::PointXYZI>());
     detectKeypoints(finalCloudCopy, keypointsFinal);
     detectKeypoints(returnCloud, keypointsNew);
+
+    if(keypointsNew->empty() || keypointsFinal->empty())
+    {
+        return *returnCloud;
+    }
 
     pcl::PointCloud<pcl::FPFHSignature33>::Ptr featuresFinal(new pcl::PointCloud<pcl::FPFHSignature33>());
     pcl::PointCloud<pcl::FPFHSignature33>::Ptr featuresNew(new pcl::PointCloud<pcl::FPFHSignature33>());
@@ -68,15 +67,43 @@ pcl::PointCloud<pcl::PointXYZI> KeyPointRegistrationWrapper::apply(pcl::PointClo
     findCorrespondences(featuresFinal, featuresNew, finalToNew);
 
     pcl::CorrespondencesPtr correspondences_(new pcl::Correspondences());
-
-    filterCorrespondences(newToFinal, finalToNew, correspondences_, keypointsNew, keypointsFinal);
-
     Eigen::Matrix4f initial_transformation_matrix_;
-    std::cout << "initial alignment..." << std::flush;
-    pcl::registration::TransformationEstimation<pcl::PointXYZI, pcl::PointXYZI>::Ptr transformation_estimation(new pcl::registration::TransformationEstimationSVD<pcl::PointXYZI, pcl::PointXYZI>);
 
-    transformation_estimation->estimateRigidTransformation(*keypointsNew, *keypointsFinal, *correspondences_, initial_transformation_matrix_);
+    {
+        pcl::registration::CorrespondenceEstimation<pcl::FPFHSignature33, pcl::FPFHSignature33> est;
+        pcl::CorrespondencesPtr correspondences(new pcl::Correspondences());
+        est.setInputSource(featuresNew);
+        est.setInputTarget(featuresFinal);
+        est.determineCorrespondences(*correspondences);
 
+        // Correspondance rejection RANSAC
+
+        pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZI> rejector_sac;
+        pcl::CorrespondencesPtr correspondences_filtered(new pcl::Correspondences());
+        rejector_sac.setInputSource(keypointsNew);
+        rejector_sac.setInputTarget(keypointsFinal);
+        rejector_sac.setInlierThreshold(2.5); // distance in m, not the squared distance
+        rejector_sac.setMaximumIterations(1000000);
+        rejector_sac.setRefineModel(false);
+        rejector_sac.setInputCorrespondences(correspondences);;
+        rejector_sac.getCorrespondences(*correspondences_filtered);
+        correspondences.swap(correspondences_filtered);
+        std::cout << correspondences->size() << " vs. " << correspondences_filtered->size() << std::endl;
+        initial_transformation_matrix_ = rejector_sac.getBestTransformation();   // Transformation Estimation method
+    }
+
+    /*
+    {
+        filterCorrespondences(newToFinal, finalToNew, correspondences_, keypointsNew, keypointsFinal);
+
+        
+        std::cout << "initial alignment..." << std::flush;
+        pcl::registration::TransformationEstimation<pcl::PointXYZI, pcl::PointXYZI>::Ptr transformation_estimation(new pcl::registration::TransformationEstimationSVD<pcl::PointXYZI, pcl::PointXYZI>);
+
+        transformation_estimation->estimateRigidTransformation(*keypointsNew, *keypointsFinal, *correspondences_, initial_transformation_matrix_);
+
+    }
+    */
     pcl::PointCloud<pcl::PointXYZI> rrCloud;
     pcl::transformPointCloud(*returnCloud, rrCloud, initial_transformation_matrix_);
     std::cout << "OK" << std::endl;

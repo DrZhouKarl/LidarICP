@@ -236,8 +236,9 @@ void PointCloudStitcher::startVisualisation()
         {
             std::unique_lock<std::mutex> lock(m_threadedIcp.getFinalCloudMutex());
             m_viewer.updatePointCloud(m_threadedIcp.getFinalCloudPtr(), m_finalCloudColor, "cloudFinal");
+            m_viewer.spinOnce();
         }
-        m_viewer.spinOnce();
+        //m_viewer.spinOnce();
     }
 
     m_grabber.stop();

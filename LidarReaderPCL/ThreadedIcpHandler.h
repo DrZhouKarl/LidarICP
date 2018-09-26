@@ -9,6 +9,7 @@
 #include <pcl/point_types.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/crop_box.h>
+#include <pcl/surface/mls.h>
 
 
 class ThreadedIcpHandler
@@ -35,6 +36,7 @@ private:
     DownSampler m_downSampler;
     pcl::PassThrough<pcl::PointXYZI> m_passThroughFilter;
     pcl::CropBox<pcl::PointXYZI> boxFilter;
+    
     ThreadSafeQueue<pcl::PointCloud<pcl::PointXYZI>::Ptr> m_toProcessQueue;
     pcl::PointCloud<pcl::PointXYZI>::Ptr m_finalCloud, m_lastFinishedCloud;
     std::mutex m_finalCloudMutex;

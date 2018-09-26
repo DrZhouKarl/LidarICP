@@ -8,12 +8,12 @@
 
 
 ThreadedIcpHandler::ThreadedIcpHandler()
-    : m_finalCloud(new pcl::PointCloud<pcl::PointXYZI>)
+    : m_finalCloud(new pcl::PointCloud<pcl::PointXYZI>())
       , m_firstCloud(true)
       , m_counter(0)
       , m_paused(false)
-      , m_minLimit(-100)
-      , m_maxLimit(100)
+      , m_minLimit(-10)
+      , m_maxLimit(10)
 {
     m_downSampler.setLeafSize(0.13);
 
@@ -24,6 +24,7 @@ ThreadedIcpHandler::ThreadedIcpHandler()
             {
                 KeyPointRegistrationWrapper kpr;
                 IterativeClosestPointWrapper icp;
+                pcl::MovingLeastSquaresOMP<pcl::PointXYZI, pcl::PointNormal> mls;
                 DownSampler downSampler;
                 downSampler.setLeafSize(0.2);
                 while (true)
@@ -84,12 +85,35 @@ void ThreadedIcpHandler::threadedFunction(IterativeClosestPointWrapper& icp, Key
     }
     /*
     {
+        mls.setComputeNormals(true);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr returnCloud(new pcl::PointCloud<pcl::PointXYZI>());
+        pcl::copyPointCloud(*toProcess, *returnCloud);
+        pcl::search::KdTree<pcl::PointXYZI>::Ptr tree;
+        // Set parameters
+        mls.setInputCloud(returnCloud);
+        mls.setPolynomialOrder(2);
+        mls.setSearchMethod(tree);
+        mls.setSearchRadius(0.2);
+
+        // Reconstruct
+        pcl::PointCloud<pcl::PointNormal> mls_points;
+        mls.process(mls_points);
+        pcl::PointCloud<pcl::PointXYZI> rrCloud;
+        pcl::copyPointCloud(mls_points, rrCloud);
+        m_lastFinishedCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(rrCloud);
+        std::unique_lock<std::mutex> lock(m_finalCloudMutex);
+        *m_finalCloud += rrCloud;
+    }
+    */
+    /*
+    {
         auto finished = kpr.apply(m_finalCloud, m_finalCloudMutex, toProcess);
         m_lastFinishedCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(finished);
         std::unique_lock<std::mutex> lock(m_finalCloudMutex);
         *m_finalCloud += finished;
     }
     */
+    
     {
         auto finished = icp.apply(m_finalCloud, m_finalCloudMutex, toProcess);
         m_lastFinishedCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(finished);
@@ -114,12 +138,11 @@ void ThreadedIcpHandler::add(pcl::PointCloud<pcl::PointXYZI>::Ptr newCloud)
 {
     if (m_firstCloud)
     {
-        /*
         boxFilter.setMin(Eigen::Vector4f(m_minLimit, m_minLimit, m_minLimit, 1.0));
         boxFilter.setMax(Eigen::Vector4f(m_maxLimit, m_maxLimit, m_maxLimit, 1.0));
         boxFilter.setInputCloud(newCloud);
         boxFilter.filter(*newCloud);
-        */
+        
         m_downSampler.apply(newCloud);
 
         std::unique_lock<std::mutex> lock(m_finalCloudMutex);

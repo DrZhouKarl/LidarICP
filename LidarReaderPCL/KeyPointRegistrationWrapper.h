@@ -11,9 +11,6 @@
 #include <pcl/features/fpfh.h>
 #include <pcl/features/fpfh_omp.h>
 #include <pcl/search/kdtree.h>
-//#include <pcl/registration/correspondence_estimation.h>
-//#include <pcl/registration/correspondence_rejection_one_to_one.h>
-#include <pcl/registration/correspondence_rejection_sample_consensus.h>
 //#include <pcl/registration/transformation_estimation_svd.h>
 //#include <pcl/features/integral_image_normal.h>
 
